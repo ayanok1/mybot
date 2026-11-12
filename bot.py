@@ -2,21 +2,21 @@ import json
 import logging
 import os
 from datetime import datetime
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
+from telegram import ReplyKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
-    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
     filters,
 )
+
 from dotenv import load_dotenv 
 load_dotenv()
 # ЗАМЕНИТЕ ЭТУ СТРОКУ НА ТОКЕН ОТ @BotFather:
 TOKEN = os.environ.get('TOKEN')
-# Имя файла для сохранения базы пользователей
+# Имя файла для сохранения базы данных пользователей
 DATA_FILE = "users.json"
 
 # Настройка логирования
@@ -27,7 +27,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# --- Функции работы с JSON ---
+# --- Функции для работы с JSON ---
 
 def load_users() -> dict:
     """Загружает словарь пользователей из файла. Если файла нет — возвращает пустой dict."""
@@ -50,7 +50,7 @@ def save_users(users_data: dict) -> None:
         logger.error(f"Ошибка при записи в файл {DATA_FILE}: {e}")
 
 
-# Загружаем базу данных при старте
+# Загружаем базу данных при старте бота
 users = load_users()
 
 
@@ -135,19 +135,18 @@ TOP_DORAMAS = """🌸 *Топ-10 Дорам:*
 
 HELP_TEXT = """🤖 *Справка по командам бота Ая:*
 
-/start — Главное меню
-/profile — Просмотреть сохранённую анкету
-/setname <имя> — Сохранить/изменить имя
+/start — Главное меню и клавиатура
+/profile — Посмотреть свою анкету
+/setname <имя> — Изменить имя
 /setfav <название> — Указать любимый фильм/сериал
 /setcomment <текст> — Оставить отзыв о боте
 /remember <текст> — Личная заметка
 /help — Показать эту справку"""
 
 
-# --- Клавиатуры ---
-
+# --- Функция создания постоянной Reply-клавиатуры внизу экрана ---
 def get_reply_keyboard():
-    """Постоянная Reply-клавиатура внизу экрана"""
+    """Создает постоянную клавиатуру с адаптивным размером (resize_keyboard=True)"""
     keyboard = [
         ["🎬 Топ Фильмов", "🎨 Топ Мультфильмов"],
         ["🍥 Топ Аниме", "🌸 Топ Дорам"],
@@ -156,50 +155,25 @@ def get_reply_keyboard():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
-def get_inline_menu():
-    """Красивые инлайн-кнопки для сообщений"""
-    keyboard = [
-        [
-            InlineKeyboardButton("🎬 Фильмы", callback_data="btn_film"),
-            InlineKeyboardButton("🎨 Мультфильмы", callback_data="btn_multfilm")
-        ],
-        [
-            InlineKeyboardButton("🍥 Аниме", callback_data="btn_anime"),
-            InlineKeyboardButton("🌸 Дорамы", callback_data="btn_dorama")
-        ],
-        [
-            InlineKeyboardButton("👤 Мой профиль", callback_data="btn_profile"),
-            InlineKeyboardButton("ℹ️ Помощь", callback_data="btn_help")
-        ]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-
-def get_back_inline_keyboard():
-    """Инлайн-кнопка возврата в меню"""
-    keyboard = [
-        [InlineKeyboardButton("⬅️ Назад в меню", callback_data="btn_menu")]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-
-# --- Команды ---
+# --- Обработчики команд ---
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /start: приветствует пользователя и выводит нижнюю клавиатуру"""
     user_data = get_or_create_user(update.effective_user)
     text = (
         f"Привет, {user_data['name']}! 👋\n"
-        "Меня зовут *Ая*, я твой персональный гид по миру кино и сериалов! 🍿\n\n"
-        "Выбери интересующий раздел с помощью кнопок:"
+        "Меня зовут *Ая*, я твой персональный гид по миру кино, аниме и дорам! 🍿\n\n"
+        "Используй кнопки на клавиатуре внизу экрана:"
     )
     await update.message.reply_text(
         text, 
         parse_mode=ParseMode.MARKDOWN, 
-        reply_markup=get_inline_menu()
+        reply_markup=get_reply_keyboard()
     )
 
 
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /profile: показывает анкету пользователя"""
     user_data = get_or_create_user(update.effective_user)
     text = (
         f"👤 *Профиль пользователя:* `{user_data['name']}`\n"
@@ -207,15 +181,16 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💬 *Комментарий о боте:* _{user_data['comment']}_\n"
         f"📝 *Заметка:* _{user_data['remember']}_\n\n"
         f"📊 *Запросов:* `{user_data['requests_count']}` | 📅 *Регистрация:* `{user_data['joined_at']}`\n\n"
-        "🛠 *Как обновить данные:* \n"
+        "🛠 *Как обновить данные через команды:* \n"
         "• `/setname Имя` — изменить имя\n"
         "• `/setfav Название` — любимый фильм/сериал\n"
-        "• `/setcomment Текст` — ваш отзыв о боте"
+        "• `/setcomment Текст` — отзыв о боте"
     )
-    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_inline_keyboard())
+    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_reply_keyboard())
 
 
 async def setname_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сохранение имени в JSON"""
     user_id = str(update.effective_user.id)
     new_name = " ".join(context.args).strip()
     if not new_name:
@@ -224,10 +199,11 @@ async def setname_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     get_or_create_user(update.effective_user)
     users[user_id]["name"] = new_name
     save_users(users)
-    await update.message.reply_text(f"✅ Ваше имя изменено на: *{new_name}*", parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(f"✅ Ваше имя изменено на: *{new_name}*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_reply_keyboard())
 
 
 async def setfav_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сохранение любимого фильма/сериала в JSON"""
     user_id = str(update.effective_user.id)
     fav_movie = " ".join(context.args).strip()
     if not fav_movie:
@@ -236,10 +212,11 @@ async def setfav_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     get_or_create_user(update.effective_user)
     users[user_id]["favorite_movie"] = fav_movie
     save_users(users)
-    await update.message.reply_text(f"✅ Любимый фильм/сериал сохранен: *{fav_movie}*", parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(f"✅ Любимый фильм/сериал сохранен: *{fav_movie}*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_reply_keyboard())
 
 
 async def setcomment_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сохранение комментария о боте в JSON"""
     user_id = str(update.effective_user.id)
     comment_text = " ".join(context.args).strip()
     if not comment_text:
@@ -248,112 +225,67 @@ async def setcomment_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     get_or_create_user(update.effective_user)
     users[user_id]["comment"] = comment_text
     save_users(users)
-    await update.message.reply_text("✅ Спасибо! Ваш комментарий о боте сохранен.", parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text("✅ Спасибо! Ваш комментарий о боте сохранен в JSON.", parse_mode=ParseMode.MARKDOWN, reply_markup=get_reply_keyboard())
 
 
 async def remember_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сохранение личной заметки"""
     user_id = str(update.effective_user.id)
     note_text = " ".join(context.args).strip()
     if not note_text:
-        await update.message.reply_text("⚠️ Напишите текст заметки, например: `/remember Посмотреть 2 сезон`", parse_mode=ParseMode.MARKDOWN)
+        await update.message.reply_text("⚠️ Укажите текст заметки, например: `/remember Посмотреть 2 сезон`", parse_mode=ParseMode.MARKDOWN)
         return
     get_or_create_user(update.effective_user)
     users[user_id]["remember"] = note_text
     save_users(users)
-    await update.message.reply_text(f"✅ Заметка сохранена: _{note_text}_", parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(f"✅ Заметка сохранена: _{note_text}_", parse_mode=ParseMode.MARKDOWN, reply_markup=get_reply_keyboard())
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(HELP_TEXT, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_inline_keyboard())
+    """Команда /help"""
+    await update.message.reply_text(HELP_TEXT, parse_mode=ParseMode.MARKDOWN, reply_markup=get_reply_keyboard())
 
 
-async def film_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(TOP_FILMS, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_inline_keyboard())
-
-async def multfilm_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(TOP_CARTOONS, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_inline_keyboard())
-
-async def anime_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(TOP_ANIME, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_inline_keyboard())
-
-async def dorama_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(TOP_DORAMAS, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_inline_keyboard())
-
-
-# --- Обработчик инлайн-кнопок (CallbackQueryHandler) ---
-
-async def inline_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    user_id = str(query.from_user.id)
-    user_data = get_or_create_user(query.from_user)
-
-    # Увеличиваем счетчик запросов в JSON
-    users[user_id]["requests_count"] += 1
-    save_users(users)
-
-    data = query.data
-
-    if data == "btn_film":
-        await query.edit_message_text(text=TOP_FILMS, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_inline_keyboard())
-    elif data == "btn_multfilm":
-        await query.edit_message_text(text=TOP_CARTOONS, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_inline_keyboard())
-    elif data == "btn_anime":
-        await query.edit_message_text(text=TOP_ANIME, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_inline_keyboard())
-    elif data == "btn_dorama":
-        await query.edit_message_text(text=TOP_DORAMAS, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_inline_keyboard())
-    elif data == "btn_profile":
-        profile_text = (
-            f"👤 *Профиль пользователя:* `{user_data['name']}`\n"
-            f"🎬 *Любимый фильм/сериал:* _{user_data['favorite_movie']}_\n"
-            f"💬 *Комментарий о боте:* _{user_data['comment']}_\n"
-            f"📝 *Заметка:* _{user_data['remember']}_\n\n"
-            f"📊 *Запросов:* `{user_data['requests_count']}` | 📅 *Регистрация:* `{user_data['joined_at']}`"
-        )
-        await query.edit_message_text(text=profile_text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_inline_keyboard())
-    elif data == "btn_help":
-        await query.edit_message_text(text=HELP_TEXT, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_inline_keyboard())
-    elif data == "btn_menu":
-        menu_text = (
-            f"Привет, {user_data['name']}! 👋\n"
-            "Меня зовут *Ая*, я твой персональный гид по миру кино и сериалов! 🍿\n\n"
-            "Выбери интересующий раздел:"
-        )
-        await query.edit_message_text(text=menu_text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_inline_menu())
-
-
-# --- Обработчик обычной Reply-клавиатуры снизу ---
+# --- Обработчик нажатий на постоянные Reply-кнопки (через if / else) ---
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ловит нажатия на кнопки нижней клавиатуры и выдает ответ через if-else"""
     user_id = str(update.effective_user.id)
     get_or_create_user(update.effective_user)
 
+    # Увеличиваем счетчик запросов пользователя и сразу сохраняем в JSON
     users[user_id]["requests_count"] += 1
     save_users(users)
 
     text = update.message.text
 
     if text == "🎬 Топ Фильмов":
-        await update.message.reply_text(TOP_FILMS, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_inline_keyboard())
+        await update.message.reply_text(TOP_FILMS, parse_mode=ParseMode.MARKDOWN, reply_markup=get_reply_keyboard())
+        
     elif text == "🎨 Топ Мультфильмов":
-        await update.message.reply_text(TOP_CARTOONS, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_inline_keyboard())
+        await update.message.reply_text(TOP_CARTOONS, parse_mode=ParseMode.MARKDOWN, reply_markup=get_reply_keyboard())
+        
     elif text == "🍥 Топ Аниме":
-        await update.message.reply_text(TOP_ANIME, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_inline_keyboard())
+        await update.message.reply_text(TOP_ANIME, parse_mode=ParseMode.MARKDOWN, reply_markup=get_reply_keyboard())
+        
     elif text == "🌸 Топ Дорам":
-        await update.message.reply_text(TOP_DORAMAS, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_inline_keyboard())
+        await update.message.reply_text(TOP_DORAMAS, parse_mode=ParseMode.MARKDOWN, reply_markup=get_reply_keyboard())
+        
     elif text == "👤 Профиль":
         await profile_command(update, context)
+        
     elif text == "ℹ️ Помощь":
-        await update.message.reply_text(HELP_TEXT, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_inline_keyboard())
+        await update.message.reply_text(HELP_TEXT, parse_mode=ParseMode.MARKDOWN, reply_markup=get_reply_keyboard())
+        
     else:
+        # Ответ на любые другие текстовые сообщения от пользователя
         await update.message.reply_text(
-            "Я вас не поняла 😅 Воспользуйтесь кнопками меню или командой /help.",
+            "Я тебя не поняла 😅 Воспользуйся кнопками меню внизу или командой /help.",
             reply_markup=get_reply_keyboard()
         )
 
 
-# --- Главная функция ---
+# --- Главная функция запуска ---
 
 def main():
     application = Application.builder().token(TOKEN).build()
@@ -366,17 +298,11 @@ def main():
     application.add_handler(CommandHandler("setcomment", setcomment_command))
     application.add_handler(CommandHandler("remember", remember_command))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("film", film_command))
-    application.add_handler(CommandHandler("multfilm", multfilm_command))
-    application.add_handler(CommandHandler("anime", anime_command))
-    application.add_handler(CommandHandler("dorama", dorama_command))
 
-    # Обработчик инлайн-кнопок
-    application.add_handler(CallbackQueryHandler(inline_button_callback))
-    # Обработчик текста снизу
+    # Регистрация обработчика обычных текстовых сообщений (для Reply-кнопок)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
 
-    logger.info("Бот Ая запущен с инлайн-кнопками и JSON-сохранением!")
+    logger.info("Бот Ая успешно запущен с Reply-клавиатурой и JSON-сохранением!")
     application.run_polling()
 
 
